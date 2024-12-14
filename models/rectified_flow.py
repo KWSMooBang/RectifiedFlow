@@ -94,7 +94,8 @@ class RectifiedFlow():
     @torch.no_grad()
     def euler_ode(self, init_input, model, reverse=False, N=100):
         """
-        run ODE solver for reflow
+        run euler ODE solver for reflow
+        X_{t+1} = X_t + v(X_t, t) * 1 / N
         init_input can be pi_0 or pi_1
         """
         eps=1e-3
