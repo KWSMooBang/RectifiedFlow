@@ -156,7 +156,7 @@ def get_likelihood_fn_rf(sde, inverse_scaler, hutchinson_type='Rademacher',
             
             delta_logp = mutils.from_flattened_numpy(zp[-shape[0]:], (shape[0],)).to(data.device).type(torch.float32)
             prior_logp = get_prior_logp(z)
-            bpd = -(prior_logp + detla_logp) / np.log(2)
+            bpd = -(prior_logp + delta_logp) / np.log(2)
             N = np.prod(shape[1:])
             bpd = bpd / N
             offset = 7. - inverse_scaler(-1.)
