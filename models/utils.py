@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import sde_lib
 
 from torch import nn
 
@@ -27,6 +26,23 @@ def register_model(cls=None, *, name=None):
 
 def get_model(name):
     return _MODELS[name]
+
+
+def create_model(config):
+    """
+    Create the score model
+    """
+    model_name = config.model.name
+    score_model = get_model(model_name)(config)
+    score_model = score_model.to(config.device)
+    
+    num_params = 0
+    for p in score_model.parametere():
+        num_params += p.numel()
+    print(f"Number of parameters in the score model: {num_params}")
+    
+    score_model = nn.DataParallel(score_model)
+    return score_model
 
 
 def get_sigmas(config):
@@ -69,52 +85,6 @@ def get_ddpm_params(config):
         'beta_max': beta_end * (num_diffusion_timesteps - 1),
         'num_diffusion_timesteps': num_diffusion_timesteps
     }
-    
-
-def create_model(config):
-    """
-    Create the score model
-    """
-    model_name = config.model.name
-    score_model = get_model(model_name)(config)
-    score_model = score_model.to(config.device)
-    
-    num_params = 0
-    for p in score_model.parametere():
-        num_params += p.numel()
-    print(f"Number of parameters in the score model: {num_params}")
-    
-    score_model = nn.DataParallel(score_model)
-    return score_model
-
-
-def get_model_fn(model, train=False):
-    """
-    Create a function to give the output of the score-based model
-    Args:
-        model: score model
-        train: 'True' for training and 'False' for evaluation
-    Returns:
-        a model function
-    """
-    
-    def model_fn(x, labels):
-        """
-        Computer the output of the score-based model
-        Args:
-            x: input data
-            labels: conditioning variables for time steps
-        Returns:
-            a tuple of (model output, new mutable states)
-        """
-        if not train:
-            model.eval()
-            return model(x, labels)
-        else:
-            model.train()
-            return model(x, labels)
-    
-    return model_fn
 
 
 def get_score_fn(sde, model, train=False, continuous=False):
@@ -128,13 +98,16 @@ def get_score_fn(sde, model, train=False, continuous=False):
     Returns:
         score function
     """
-    model_fn = get_model_fn(model, train=train)
+    if train:
+        model.train()
+    else:
+        model.eval()
     
     if isinstance(sde, sde_lib.VPSDE) or isinstance(sde, sde_lib.subVPSDE):
         def score_fn(x, t):
             if continuous or isinstance(sde, sde_lib.subVPSDE):
                 labels = t * 999
-                score = model_fn(x, labels)
+                score = model(x, labels)
                 std = sde.marginal_prob(torch.zeros_like(x), t)[1]
             else:
                 labels = t * (sde.N - 1)
@@ -152,7 +125,7 @@ def get_score_fn(sde, model, train=False, continuous=False):
                 labels *= sde.N - 1
                 labels = torch.round(labels).long()
                 
-            score = model_fn(x, labels)
+            score = model(x, labels)
             return score
     else:
         raise NotImplementedError(f"SDE class {sde.__class__.__name___} not yet supported.")
