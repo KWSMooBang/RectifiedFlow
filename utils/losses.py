@@ -23,7 +23,7 @@ def get_optimizer(config, params):
     return optimizer
 
 
-def optimization_manager(config):
+def get_optimize_fn(config):
     def optimize_fn(optimizer, params, step, lr=config.optim.lr, 
                     warmup=config.optim.warmup, grad_clip=config.optim.grad_clip):
         if warmup > 0:
@@ -36,7 +36,7 @@ def optimization_manager(config):
     return optimize_fn
 
 
-def get_rectified_flow_loss_fn(sde, train, reduce_mean=True, eps=1e-3):
+def get_loss_fn(sde, train, reduce_mean=True, eps=1e-3):
     """
     Create a loss function for training with rectified flow
 
@@ -52,7 +52,7 @@ def get_rectified_flow_loss_fn(sde, train, reduce_mean=True, eps=1e-3):
     
     reduce_op = torch.mean if reduce_mean else lambda *args, **kwargs: 0.5 * torch.sum(*args, **kwargs)
     
-    def loss_fn(model, batch):
+    def loss_fn(batch):
         """Compute the loss function
 
         Args:
@@ -88,8 +88,11 @@ def get_rectified_flow_loss_fn(sde, train, reduce_mean=True, eps=1e-3):
         perturbed_data = t_expand * batch + (1. - t_expand) * z0
         target = batch - z0
         
-        model_fn = mutils.get_model_fn(model, train=train)
-        score = model_fn(perturbed_data, t * 999)
+        if train:
+            sde.model.train()
+        else:
+            sde.model.eval()
+        score = sde.model(perturbed_data, t)
         
         if sde.reflow_flag:
             if sde.reflow_loss == 'l2':
@@ -133,7 +136,7 @@ def get_step_fn(sde, train, optimize_fn=None, reduce_mean=False, continuous=True
     else:
         assert not likelihood_weighting, "Likelihood weighting is not supported for original SMLD/DDPM training."
         if isinstance(sde, RectifiedFlow):
-            loss_fn = get_rectified_flow_loss_fn(sde, train, reduce_mean=reduce_mean)
+            loss_fn = get_loss_fn(sde, train, reduce_mean=reduce_mean)
         else:
             raise ValueError(f"Discrete training for {sde.__class__.__name__} is not recommended.") 
     
@@ -149,13 +152,13 @@ def get_step_fn(sde, train, optimize_fn=None, reduce_mean=False, continuous=True
         Returns:
             loss: The average loss value of this state
         """
-        model = state['model']
+        model = sde.model
         if train:
             optimizer = state['optimizer']
             optimizer.zero_grad()
-            loss = loss_fn(model, batch)
+            loss = loss_fn(batch)
             loss.backward()
-            optimize_fn(optimize_fn, model.parameters(), step=state['step'])
+            optimize_fn(optimizer, model.parameters(), step=state['step'])
             state['step'] += 1
             state['ema'].update(model.parameters())
         else:
@@ -163,7 +166,7 @@ def get_step_fn(sde, train, optimize_fn=None, reduce_mean=False, continuous=True
                 ema = state['ema']
                 ema.store(model.parameters()) 
                 ema.copy_to(model.parameters())
-                loss = loss_fn(model, batch)
+                loss = loss_fn(batch)
                 ema.restore(model.parameters())
                 
         return loss       
