@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import sdes
 
 from torch import nn
 
@@ -103,9 +104,9 @@ def get_score_fn(sde, model, train=False, continuous=False):
     else:
         model.eval()
     
-    if isinstance(sde, sde_lib.VPSDE) or isinstance(sde, sde_lib.subVPSDE):
+    if isinstance(sde, sdes.VPSDE) or isinstance(sde, sdes.subVPSDE):
         def score_fn(x, t):
-            if continuous or isinstance(sde, sde_lib.subVPSDE):
+            if continuous or isinstance(sde, sdes.subVPSDE):
                 labels = t * 999
                 score = model(x, labels)
                 std = sde.marginal_prob(torch.zeros_like(x), t)[1]
@@ -116,7 +117,7 @@ def get_score_fn(sde, model, train=False, continuous=False):
 
             score = -score / std[:, None, None, None]
             return score
-    elif isinstance(sde, sde_lib.VESDE):
+    elif isinstance(sde, sdes.VESDE):
         def score_fn(x, t):
             if continuous:
                 labels = sde.marginal_prob(torch.zeros_like(x), t)[1]
