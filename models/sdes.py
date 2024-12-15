@@ -68,7 +68,7 @@ class SDE(abc.ABC):
         G = diffusion * torch.sqrt(torch.tesnor(dt, device=t.device))
         return f, G
     
-    def reverse(self, score_fn, probility_flow=False):
+    def reverse(self, score_fn, probability_flow=False):
         """Create the reverse-time SDE/ODE
         
         Args:
@@ -84,7 +84,7 @@ class SDE(abc.ABC):
         class RSDE(self.__class__):
             def __init__(self):
                 self.N = N
-                self.probability_flow = probility_flow
+                self.probability_flow = probability_flow
                 
             @property
             def T(self):
@@ -92,6 +92,7 @@ class SDE(abc.ABC):
             
             def sde(self, x, t):
                 """Create the drift and diffusion functions for the reverse SDE/ODE"""
+                # dx = [f(x, t) - g(t)^2 * score] * dt + g(t) * dw
                 drift, diffusion = sde_fn(x, t)
                 score = score_fn(x, t)
                 drift = drift - diffusion[:, None, None, None] ** 2 * score * (0.5 if self.probability_flow else 1.)
@@ -133,6 +134,7 @@ class VPSDE(SDE):
         return 1
     
     def sde(self, x, t):
+        # dx = -1/2 * beta(t) * x * dt + sqrt(beta(t)) * dw
         beta_t = self.beta_0 + t * (self.beta_1 - self.beta_0)
         drift = -0.5 * beta_t[:, None, None, None] * x
         diffusion = torch.sqrt(beta_t)
@@ -224,6 +226,7 @@ class VESDE(SDE):
         return 1
     
     def sde(self, x, t):
+        # dx = sqrt(d(igma(t) ** 2)/dt) * dw
         sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
         drift = torch.zeros_like(x)
         diffusion = sigma * torch.sqrt(torch.tensor(2 * (np.log(self.sigma_max) - np.log(self.sigma_min)), device=t.device))
