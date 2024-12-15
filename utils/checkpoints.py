@@ -4,7 +4,7 @@ import torch
 import tensorflow as tf
 
 
-def restore_checkpoint(checkpoint_dir, state, device):
+def load_checkpoint(checkpoint_dir, state, device):
     if not tf.io.gfile.exists(checkpoint_dir):
         tf.io.gfile.makedirs(os.path.dirname(checkpoint_dir))
         logging.warning(f"No checkpoint found at {checkpoint_dir}. Returned the same state as input")
