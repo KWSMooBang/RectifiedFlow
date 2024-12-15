@@ -6,13 +6,15 @@ import torch
 class SDE(abc.ABC):
     """SDE abstract class. Methods are designed for a mini-batch of inputs"""
     
-    def __init__(self, N):
+    def __init__(self, model, N):
         """Construct SDE
         
         Args:
+            model: score prediction neural network
             N: the number of discretization time steps
         """
         super().__init__()
+        self.model = model
         self.N = N
         
     @property
@@ -94,7 +96,7 @@ class SDE(abc.ABC):
                 """Create the drift and diffusion functions for the reverse SDE/ODE"""
                 # dx = [f(x, t) - g(t)^2 * score] * dt + g(t) * dw
                 drift, diffusion = sde_fn(x, t)
-                score = score_fn(x, t)
+                score = self.model(x, t)
                 drift = drift - diffusion[:, None, None, None] ** 2 * score * (0.5 if self.probability_flow else 1.)
                 # Set the diffusion function to zero for ODEs.
                 diffusion = 0. if self.probability_flow else diffusion
@@ -103,7 +105,7 @@ class SDE(abc.ABC):
             def discretize(self, x, t):
                 """Create discretized iteration rules for the reverse diffusion sampler"""
                 f, G = discretize_fn(x, t)
-                rev_f = f - G[:, None, None, None] ** 2 * score_fn(x, t) * (0.5 if self.probility_flow else 1.)
+                rev_f = f - G[:, None, None, None] ** 2 * self.model(x, t) * (0.5 if self.probility_flow else 1.)
                 rev_G = torch.zeros_like(G) if self.probability_flow else G
                 return rev_f, rev_G
             
@@ -111,7 +113,7 @@ class SDE(abc.ABC):
     
     
 class VPSDE(SDE):
-    def __init__(self, beta_min=0.1, beta_max=20, N=1000):
+    def __init__(self, model, beta_min=0.1, beta_max=20, N=1000):
         """Construct a variance preserving SDE
         
         Args:
@@ -119,7 +121,7 @@ class VPSDE(SDE):
             beta_max: value of beta(1)
             N: number of discretization steps
         """
-        super().__init__(N)
+        super().__init__(model, N)
         self.beta_0 = beta_min
         self.beta_1 = beta_max
         self.N = N
@@ -167,7 +169,7 @@ class VPSDE(SDE):
     
     
 class subVPSDE(SDE):
-    def __init__(self, beta_min=0.1, beta_max=20, N=1000):
+    def __init__(self, model, beta_min=0.1, beta_max=20, N=1000):
         """Construct teh sub-VP SDE that excels at likelihoods
         
         Args:
@@ -175,7 +177,7 @@ class subVPSDE(SDE):
             beta_max: value of beta(1)
             N: number of discretization steps
         """ 
-        super().__init__(N)
+        super().__init__(model, N)
         self.beta_0 = beta_min
         self.beta_1 = beta_max
         self.N = N
@@ -207,7 +209,7 @@ class subVPSDE(SDE):
     
 
 class VESDE(SDE):
-    def __init__(self, sigma_min=0.01, sigma_max=50, N=1000):
+    def __init__(self, model, sigma_min=0.01, sigma_max=50, N=1000):
         """Construct a variance exploding SDE
         
         Args:
@@ -215,7 +217,7 @@ class VESDE(SDE):
             sigma_max: largest sigma
             N: number of discretization steps
         """
-        super().__init__(N)
+        super().__init__(model, N)
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.discretize_sigmas = torch.exp(torch.linspace(np.log(self.sigma_min), np.log(self.sigma_max), N))
