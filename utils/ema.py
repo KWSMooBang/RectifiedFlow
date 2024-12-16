@@ -33,6 +33,7 @@ class ExponentialMovingAverage:
         with torch.no_grad():
             parameters = [p for p in parameters if p.requires_grad]
             for s_param, param in zip(self.shadow_params, parameters):
+                # theta_s = beta * theta_s + (1 - beta) * theta_new
                 s_param.sub_(one_minus_decay * (s_param - param))
         
     def copy_to(self, parameters):
