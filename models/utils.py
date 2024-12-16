@@ -88,7 +88,7 @@ def get_ddpm_params(config):
     }
 
 
-def get_score_fn(sde, model, train=False, continuous=False):
+def get_score_fn(sde, train=False, continuous=False):
     """
     Wraps 'score_fn' so that the model output corresponds to a real time-dependent score function
     Args:
@@ -100,19 +100,21 @@ def get_score_fn(sde, model, train=False, continuous=False):
         score function
     """
     if train:
-        model.train()
+        sde.model.train()
     else:
-        model.eval()
+        sde.model.eval()
     
     if isinstance(sde, sdes.VPSDE) or isinstance(sde, sdes.subVPSDE):
         def score_fn(x, t):
+            # scale neural network output by standard deviation and filp sign
             if continuous or isinstance(sde, sdes.subVPSDE):
+                # For 
                 labels = t * 999
-                score = model(x, labels)
+                score = sde.model(x, labels)
                 std = sde.marginal_prob(torch.zeros_like(x), t)[1]
             else:
                 labels = t * (sde.N - 1)
-                score = model(x, labels)
+                score = sde.model(x, labels)
                 std = sde.sqrt_1m_alphas_cumprod.to(labels.device)[labels.long()]
 
             score = -score / std[:, None, None, None]
@@ -126,7 +128,7 @@ def get_score_fn(sde, model, train=False, continuous=False):
                 labels *= sde.N - 1
                 labels = torch.round(labels).long()
                 
-            score = model(x, labels)
+            score = sde.model(x, labels)
             return score
     else:
         raise NotImplementedError(f"SDE class {sde.__class__.__name___} not yet supported.")
