@@ -61,7 +61,7 @@ def central_crop(image, size):
     return tf.image.crop_to_bounding_box(image, top, left, size, size)
 
 
-def get_data(config, uniform_dequantization=False, evaluation=False):
+def get_dataset(config, uniform_dequantization=False, evaluation=False):
     """Create data loaders for training and evaluation
 
     Args:
