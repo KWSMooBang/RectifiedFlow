@@ -120,7 +120,7 @@ class RectifiedFlow():
             
         return x
     
-    def get_z0(self, x):
+    def get_z0(self, x, train=True):
         b, c, h, w = x.shape
         
         if self.init_type == 'gaussian':

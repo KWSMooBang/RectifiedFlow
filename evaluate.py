@@ -253,5 +253,31 @@ def evaluate(config, work_dir, eval_folder="eval"):
         all_pools = np.concatenate(all_pools, axis=0)[:config.eval.num_samples]
         
         # Load pre-computed dataset statistics
-        data_stats = evalu
-    
+        data_stats = evaluation.load_dataset_stats(config)
+        data_pools = data_stats['pool_3']
+        
+        # Compute FID/KID/IS on all samples together
+        if not inceptionv3:
+            inception_score = tfgan.eval.classifier_score_from_logits(all_logits)
+        else:
+            inception_scroe = -1
+            
+        fid = tfgan.eval.frechet_classifier_distance_from_activations(
+            data_pools, all_pools
+        )
+        # Hack to get tfgan KID work for eager execution
+        tf_data_pools = tf.convert_to_tensor(data_pools)
+        tf_all_pools = tf.convert_to_tensor(all_pools)
+        kid = tfgan.eval.kernel_classifier_distance_from_activations(
+            tf_data_pools, tf_all_pools
+        ).numpy()
+        del tf_data_pools, tf_all_pools
+        
+        logging.info(
+            f"checkpoint-{checkpoint} --- inception_score: {inception_score:.6e}, FID: {fid:.6e}, KID: {kid:.6e}"
+        )
+        
+        with tf.io.gfile.GFile(os.path.join(eval_dir, f"report_{checkpoint}.npz"), 'wb') as f:
+            io_buffer = io.BytesIO()
+            np.savez_compressed(io_buffer, iS=inception_score, fid=fid, kid=kid)
+            f.write(io_buffer.getvalue())
