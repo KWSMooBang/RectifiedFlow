@@ -56,7 +56,7 @@ def train(config, work_dir):
     initial_step = int(state['step'])
     
     # Build data iterators
-    train_dataset, eval_dataset = datasets.get_data(config, uniform_dequantization=config.data.uniform_dequantization)
+    train_dataset, eval_dataset = datasets.get_dataset(config, uniform_dequantization=config.data.uniform_dequantization)
     train_iter = iter(train_dataset)
     eval_iter = iter(eval_dataset)
     
